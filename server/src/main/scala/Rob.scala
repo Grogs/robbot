@@ -10,7 +10,6 @@ object Rob extends App {
     case class Say(text: String) extends InteractionA[Unit]
     case class Receive() extends InteractionA[String]
     case class Ask(question: String) extends InteractionA[String]
-    case class Respond(input: String, handler: String => String) extends InteractionA[Unit]
 
 
     type Interaction[A] = Free[InteractionA, A]
@@ -22,19 +21,17 @@ object Rob extends App {
     def receive(): Interaction[String] =
         liftF[InteractionA, String](Receive())
 
-    def respond(input: String)(handler: String => String): Interaction[Unit] =
-        liftF[InteractionA, Unit](Respond(input, handler))
-
     def ask(question: String): Interaction[String] =
         liftF[InteractionA, String](Ask(question))
 
     val program = for {
         _ <- say("-v Cellos Good morning everyone")
         jacekStatus <- ask("How are you today yaseck?")
-        _ <- respond(jacekStatus){
-            case "g" => "Great glad to hear it"
-            case _ => "Oh dear"
-        }
+        jacekResponse =
+            if (jacekStatus == "g")
+                "Great glad to hear it"
+            else
+                "Oh dear"
         _ <- ask("Where is Russel this morning?")
         _ <- ask("Any updates to production?")
         _ <- say("okay moving on")
@@ -63,9 +60,6 @@ object Rob extends App {
                     case Ask(question) =>
                         say(question)
                         readLine().asInstanceOf[A]
-                    case Respond(input, handler) =>
-                        say(handler(input))
-                        ()
                 }
         }
 
