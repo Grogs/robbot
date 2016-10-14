@@ -5,6 +5,9 @@ version := "1.0"
 
 scalaVersion := "2.11.8"
 
+// loads the server project at sbt startup
+onLoad in Global := (Command.process("project server", _: State)) compose (onLoad in Global).value
+
 lazy val server = project
   .settings(
       libraryDependencies ++= Seq(
