@@ -11,15 +11,18 @@ object Rob extends App {
 
 
     sealed trait Interaction[Output]
+
     case class Say(text: String) extends Interaction[Unit]
+
     case class Receive() extends Interaction[String]
+
     case class Ask(question: String) extends Interaction[String]
 
-    implicit class Lift[F[_],A](fa: F[A]) {
-        def lift: Free[F,A] = Free.liftF(fa)
+    implicit class Lift[F[_], A](fa: F[A]) {
+        def lift: Free[F, A] = Free.liftF(fa)
     }
 
-    def untilM[F[_],R](term: R)(m: Free[F,R]): Free[F,R] =
+    def untilM[F[_], R](term: R)(m: => Free[F, R]): Free[F, R] =
         m.flatMap(res =>
             if (res == term)
                 Free.pure(res)
@@ -32,10 +35,10 @@ object Rob extends App {
         _ <- Say("-v Cellos Good morning everyone").lift
         jacekStatus <- Ask("How are you today yaseck?").lift
         jacekResponse =
-            if (jacekStatus == "g")
-                "Great glad to hear it"
-            else
-                "Oh dear"
+        if (jacekStatus == "g")
+            "Great glad to hear it"
+        else
+            "Oh dear"
         _ <- Ask("Where is Russel this morning?").lift
         _ <- Ask("Any updates to production?").lift
         _ <- Say("okay moving on").lift
@@ -50,14 +53,14 @@ object Rob extends App {
                     case "r" => Say("Yacek could you put a red dot on that").lift
                     case "e" =>
                         Say("Okay great thanks everyone").lift
-                    case _   => Say("Sorry I didn't quite catch that?").lift
+                    case _ => Say("Sorry I didn't quite catch that?").lift
                 }
             } yield in
         }
     } yield ()
 
 
-    def impureCompiler: Interaction ~> Id  =
+    def impureCompiler: Interaction ~> Id =
         new (Interaction ~> Id) {
 
             def say(thing: String) = {
@@ -80,23 +83,4 @@ object Rob extends App {
 
 
     program.foldMap(impureCompiler)
-
-//    var run = true
-//
-//    while (run) {
-//
-//        val lResponse = readLine()
-//
-//        lResponse match {
-//            case "n" => say(nextTicketResponses(util.Random.nextInt(2)))
-//            case "l" => say(tooLongResponses(util.Random.nextInt(2)))
-//            case "h" => say("Well how do you feel about this?")
-//            case "r" => say("Yacek could you put a red dot on that")
-//            case "e" =>
-//                say("Okay great thanks everyone")
-//                run = false
-//            case _   => say("Sorry I didn't quite catch that?")
-//        }
-//
-//    }
 }
