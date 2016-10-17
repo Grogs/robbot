@@ -19,13 +19,13 @@ object Rob extends App {
         def lift: Free[F,A] = Free.liftF(fa)
     }
 
-//    def untilM[F,R](term: R)(m: Free[F,R]) =
-//        m.flatMap(res =>
-//            if (res == term)
-//                Free.pure(res)
-//            else
-//                m
-//        )
+    def untilM[F[_],R](term: R)(m: Free[F,R]): Free[F,R] =
+        m.flatMap(res =>
+            if (res == term)
+                Free.pure(res)
+            else
+                untilM(term)(m)
+        )
 
 
     val program: Free[Interaction, Unit] = for {
@@ -40,21 +40,20 @@ object Rob extends App {
         _ <- Ask("Any updates to production?").lift
         _ <- Say("okay moving on").lift
         _ <- Say("Lets talk about this ticket").lift
-//        _ <- untilM("e") {
-//            for {
-//                in <- Receive().lift
-//                resp <- in match {
-//                    case "n" => Say(nextTicketResponses(util.Random.nextInt(2)))
-//                    case "l" => Say(tooLongResponses(util.Random.nextInt(2)))
-//                    case "h" => Say("Well how do you feel about this?")
-//                    case "r" => Say("Yacek could you put a red dot on that")
-//                    case "e" =>
-//                        Say("Okay great thanks everyone")
-//                        run = false
-//                    case _   => Say("Sorry I didn't quite catch that?")
-//                }
-//            } yield in
-//        }
+        _ <- untilM("e") {
+            for {
+                in <- Receive().lift
+                resp <- in match {
+                    case "n" => Say(nextTicketResponses(util.Random.nextInt(2))).lift
+                    case "l" => Say(tooLongResponses(util.Random.nextInt(2))).lift
+                    case "h" => Say("Well how do you feel about this?").lift
+                    case "r" => Say("Yacek could you put a red dot on that").lift
+                    case "e" =>
+                        Say("Okay great thanks everyone").lift
+                    case _   => Say("Sorry I didn't quite catch that?").lift
+                }
+            } yield in
+        }
     } yield ()
 
 
