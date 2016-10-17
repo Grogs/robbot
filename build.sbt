@@ -15,6 +15,8 @@ lazy val server = project
       )
   )
 
+lazy val shared = crossProject
+
 lazy val client = project.enablePlugins(ScalaJSPlugin)
   .settings(
       persistLauncher := true,

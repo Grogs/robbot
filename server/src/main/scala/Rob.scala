@@ -6,51 +6,67 @@ import cats.{Id, ~>}
 
 object Rob extends App {
 
-    sealed trait InteractionA[Output]
-    case class Say(text: String) extends InteractionA[Unit]
-    case class Receive() extends InteractionA[String]
-    case class Ask(question: String) extends InteractionA[String]
+    val nextTicketResponses = Seq("Next Ticket", "what about this one?", "Okay lets talk about this now")
+    val tooLongResponses = Seq("Maybe we should talk about this after the standup", "Lets take this offline", "Okay lets talk about this later")
 
 
-    type Interaction[A] = Free[InteractionA, A]
+    sealed trait Interaction[Output]
+    case class Say(text: String) extends Interaction[Unit]
+    case class Receive() extends Interaction[String]
+    case class Ask(question: String) extends Interaction[String]
+
+    implicit class Lift[F[_],A](fa: F[A]) {
+        def lift: Free[F,A] = Free.liftF(fa)
+    }
+
+//    def untilM[F,R](term: R)(m: Free[F,R]) =
+//        m.flatMap(res =>
+//            if (res == term)
+//                Free.pure(res)
+//            else
+//                m
+//        )
 
 
-    def say(text: String): Interaction[Unit] =
-        liftF[InteractionA, Unit](Say(text))
-
-    def receive(): Interaction[String] =
-        liftF[InteractionA, String](Receive())
-
-    def ask(question: String): Interaction[String] =
-        liftF[InteractionA, String](Ask(question))
-
-    val program = for {
-        _ <- say("-v Cellos Good morning everyone")
-        jacekStatus <- ask("How are you today yaseck?")
+    val program: Free[Interaction, Unit] = for {
+        _ <- Say("-v Cellos Good morning everyone").lift
+        jacekStatus <- Ask("How are you today yaseck?").lift
         jacekResponse =
             if (jacekStatus == "g")
                 "Great glad to hear it"
             else
                 "Oh dear"
-        _ <- ask("Where is Russel this morning?")
-        _ <- ask("Any updates to production?")
-        _ <- say("okay moving on")
-        _ <- say("Lets talk about this ticket")
-        //need .whileM for loop over "next ticket" until standup is complete.
-        //It's available in Scalaz: https://github.com/scalaz/scalaz/blob/series/7.3.x/core/src/main/scala/scalaz/Monad.scala#L21
-        //But it's not yet in cats, as discussed here: https://github.com/typelevel/cats/pull/1216
+        _ <- Ask("Where is Russel this morning?").lift
+        _ <- Ask("Any updates to production?").lift
+        _ <- Say("okay moving on").lift
+        _ <- Say("Lets talk about this ticket").lift
+//        _ <- untilM("e") {
+//            for {
+//                in <- Receive().lift
+//                resp <- in match {
+//                    case "n" => Say(nextTicketResponses(util.Random.nextInt(2)))
+//                    case "l" => Say(tooLongResponses(util.Random.nextInt(2)))
+//                    case "h" => Say("Well how do you feel about this?")
+//                    case "r" => Say("Yacek could you put a red dot on that")
+//                    case "e" =>
+//                        Say("Okay great thanks everyone")
+//                        run = false
+//                    case _   => Say("Sorry I didn't quite catch that?")
+//                }
+//            } yield in
+//        }
     } yield ()
 
 
-    def impureCompiler: InteractionA ~> Id  =
-        new (InteractionA ~> Id) {
+    def impureCompiler: Interaction ~> Id  =
+        new (Interaction ~> Id) {
 
             def say(thing: String) = {
                 s"say ${thing}".!!
                 println(thing)
             }
 
-            def apply[A](fa: InteractionA[A]) =
+            def apply[A](fa: Interaction[A]) =
                 fa match {
                     case Say(text) =>
                         say(text)
@@ -66,9 +82,6 @@ object Rob extends App {
 
     program.foldMap(impureCompiler)
 
-//    val nextTicketResponses = Seq("Next Ticket", "what about this one?", "Okay lets talk about this now")
-//    val tooLongResponses = Seq("Maybe we should talk about this after the standup", "Lets take this offline", "Okay lets talk about this later")
-//
 //    var run = true
 //
 //    while (run) {
