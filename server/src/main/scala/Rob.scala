@@ -3,15 +3,17 @@ import cats.free.Free.liftF
 import cats.free.Free
 import cats.{Foldable, Id, Monad, MonadCombine, ~>}
 
+import scala.util.Random
+
 object Rob extends App {
 
-    val nextTicketResponses = Seq("Next Ticket", "what about this one?", "Okay lets talk about this now")
+    val nextTicketResponses = Seq("Next Ticket", "what about this one?", "Okay lets talk about this now", "Okay moving on, I haven't seen this many red dots since Nicola Sturgeon")
     val tooLongResponses = Seq("Maybe we should talk about this after the standup", "Lets take this offline", "Okay lets talk about this later")
 
 
     sealed trait Interaction[Output]
 
-    case class Say(text: String) extends Interaction[Unit]
+    case class Say(text: String, voice: Option[String] = None) extends Interaction[Unit]
 
     case class Receive() extends Interaction[String]
 
@@ -38,24 +40,25 @@ object Rob extends App {
 
 
 
-  val program: Free[Interaction, Unit] = for {
-        _ <- Say("-v Cellos Good morning everyone").lift
+    val program: Free[Interaction, Unit] = for {
+        _ <- Say("Good morning everyone", Some("Cellos")).lift
         jacekStatus <- Ask("How are you today yaseck?").lift
-        jacekResponse =
-        if (jacekStatus == "g")
-            "Great glad to hear it"
-        else
-            "Oh dear"
+        _ <- Say(
+            if (jacekStatus == "g")
+                "Great. Glad to hear it!"
+            else
+                "Oh dear!"
+        ).lift
         _ <- Ask("Where is Russel this morning?").lift
         _ <- Ask("Any updates to production?").lift
         _ <- Say("okay moving on").lift
-        _ <- Say("Lets talk about this ticket").lift
+        _ <- Say("Shall we talk about this ticket?").lift
         _ <- untilF("e") {
             for {
                 in <- Receive().lift
                 resp <- in match {
-                    case "n" => Say(nextTicketResponses(util.Random.nextInt(2))).lift
-                    case "l" => Say(tooLongResponses(util.Random.nextInt(2))).lift
+                    case "n" => Say(Random.shuffle(nextTicketResponses).head).lift
+                    case "l" => Say(Random.shuffle(tooLongResponses).head).lift
                     case "h" => Say("Well how do you feel about this?").lift
                     case "r" => Say("Yacek could you put a red dot on that").lift
                     case "e" =>
@@ -70,24 +73,23 @@ object Rob extends App {
     def impureCompiler: Interaction ~> Id =
         new (Interaction ~> Id) {
 
-            def say(thing: String) = {
-                s"say ${thing}".!!
-                println(thing)
+            def say(text: String, voice: Option[String]) = {
+                println(text)
+                s"say -v ${voice.getOrElse("Alex")} $text".!!
             }
 
             def apply[A](fa: Interaction[A]) =
                 fa match {
-                    case Say(text) =>
-                        say(text)
+                    case Say(text, voice) =>
+                        say(text, voice)
                         ()
                     case Receive() =>
                         readLine().asInstanceOf[A]
                     case Ask(question) =>
-                        say(question)
+                        say(question, None)
                         readLine().asInstanceOf[A]
                 }
         }
-
 
     program.foldMap(impureCompiler)
 }
