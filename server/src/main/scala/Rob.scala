@@ -1,8 +1,8 @@
-import scala.sys.process._
-import cats.free.Free.liftF
 import cats.free.Free
-import cats.{Foldable, Id, Monad, MonadCombine, ~>}
+import cats.{Id, Monad, ~>}
+import language.{Ask, Interaction, Receive, Say}
 
+import scala.sys.process._
 import scala.util.Random
 
 object Rob extends App {
@@ -10,45 +10,13 @@ object Rob extends App {
     val nextTicketResponses = Seq("Next Ticket", "what about this one?", "Okay lets talk about this now", "Okay moving on, I haven't seen this many red dots since Nicola Sturgeon")
     val tooLongResponses = Seq("Maybe we should talk about this after the standup", "Lets take this offline", "Okay lets talk about this later")
 
-
-    sealed trait Interaction[Output]
-
-    case class Say(text: String, voice: Option[String] = None) extends Interaction[Unit]
-
-    case class Receive() extends Interaction[String]
-
-    case class Ask(question: String) extends Interaction[String]
-
-    implicit class Lift[F[_], A](fa: F[A]) {
-        def lift: Free[F, A] = Free.liftF(fa)
-    }
-
-  def untilF[T[_], Res](term: Res)(m: => Free[T, Res]): Free[T, Res] = {
-    type F[r] = Free[T, r]
-    untilM[F, Res](term)(m)
-  }
-
-  def untilM[M[_]:Monad, R](term: R)(m: => M[R]): M[R] = {
-      val M = implicitly[Monad[M]]
-      M.flatMap(m)(res =>
-        if (res == term)
-          M.pure(res)
-        else
-          untilM(term)(m)
-      )
-    }
-
-
+    import language._
 
     val program: Free[Interaction, Unit] = for {
         _ <- Say("Good morning everyone", Some("Cellos")).lift
         jacekStatus <- Ask("How are you today yaseck?").lift
-        _ <- Say(
-            if (jacekStatus == "g")
-                "Great. Glad to hear it!"
-            else
-                "Oh dear!"
-        ).lift
+        jacekResponse = if (jacekStatus == "g") "Great. Glad to hear it!" else "Oh dear!"
+        _ <- Say(jacekResponse).lift
         _ <- Ask("Where is Russel this morning?").lift
         _ <- Ask("Any updates to production?").lift
         _ <- Say("okay moving on").lift
@@ -70,26 +38,56 @@ object Rob extends App {
     } yield ()
 
 
-    def impureCompiler: Interaction ~> Id =
-        new (Interaction ~> Id) {
 
-            def say(text: String, voice: Option[String]) = {
-                println(text)
-                s"say -v ${voice.getOrElse("Alex")} $text".!!
-            }
+    program.foldMap(SpokenInterpreter)
+}
 
-            def apply[A](fa: Interaction[A]) =
-                fa match {
-                    case Say(text, voice) =>
-                        say(text, voice)
-                        ()
-                    case Receive() =>
-                        readLine().asInstanceOf[A]
-                    case Ask(question) =>
-                        say(question, None)
-                        readLine().asInstanceOf[A]
-                }
+
+object SpokenInterpreter extends (Interaction ~> Id) {
+
+    def say(text: String, voice: Option[String]) = {
+        println(text)
+        s"say -v ${voice.getOrElse("Alex")} $text".!!
+    }
+
+    def apply[A](fa: Interaction[A]) =
+        fa match {
+            case Say(text, voice) =>
+                say(text, voice)
+                ()
+            case Receive() =>
+                readLine().asInstanceOf[A]
+            case Ask(question) =>
+                say(question, None)
+                readLine().asInstanceOf[A]
         }
 
-    program.foldMap(impureCompiler)
+}
+
+object language {
+
+    sealed trait Interaction[Output]
+    case class Say(text: String, voice: Option[String] = None) extends Interaction[Unit]
+    case class Receive() extends Interaction[String]
+    case class Ask(question: String) extends Interaction[String]
+
+    implicit class Lift[F[_], A](fa: F[A]) {
+        def lift: Free[F, A] = Free.liftF(fa)
+    }
+
+    def untilF[T[_], Res](term: Res)(m: => Free[T, Res]): Free[T, Res] = {
+        type F[r] = Free[T, r]
+        untilM[F, Res](term)(m)
+    }
+
+    def untilM[M[_] : Monad, R](term: R)(m: => M[R]): M[R] = {
+        val M = implicitly[Monad[M]]
+        M.flatMap(m)(res =>
+            if (res == term)
+                M.pure(res)
+            else
+                untilM(term)(m)
+        )
+    }
+
 }
