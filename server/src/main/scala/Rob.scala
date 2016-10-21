@@ -1,8 +1,7 @@
 import scala.sys.process._
 import cats.free.Free.liftF
 import cats.free.Free
-
-import cats.{Id, ~>}
+import cats.{Foldable, Id, Monad, MonadCombine, ~>}
 
 object Rob extends App {
 
@@ -22,16 +21,24 @@ object Rob extends App {
         def lift: Free[F, A] = Free.liftF(fa)
     }
 
-    def untilM[F[_], R](term: R)(m: => Free[F, R]): Free[F, R] =
-        m.flatMap(res =>
-            if (res == term)
-                Free.pure(res)
-            else
-                untilM(term)(m)
-        )
+  def untilF[T[_], Res](term: Res)(m: => Free[T, Res]): Free[T, Res] = {
+    type F[r] = Free[T, r]
+    untilM[F, Res](term)(m)
+  }
+
+  def untilM[M[_]:Monad, R](term: R)(m: => M[R]): M[R] = {
+      val M = implicitly[Monad[M]]
+      M.flatMap(m)(res =>
+        if (res == term)
+          M.pure(res)
+        else
+          untilM(term)(m)
+      )
+    }
 
 
-    val program: Free[Interaction, Unit] = for {
+
+  val program: Free[Interaction, Unit] = for {
         _ <- Say("-v Cellos Good morning everyone").lift
         jacekStatus <- Ask("How are you today yaseck?").lift
         jacekResponse =
@@ -43,7 +50,7 @@ object Rob extends App {
         _ <- Ask("Any updates to production?").lift
         _ <- Say("okay moving on").lift
         _ <- Say("Lets talk about this ticket").lift
-        _ <- untilM("e") {
+        _ <- untilF("e") {
             for {
                 in <- Receive().lift
                 resp <- in match {
