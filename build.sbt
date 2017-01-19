@@ -11,7 +11,8 @@ onLoad in Global := (Command.process("project server", _: State)) compose (onLoa
 lazy val server = project
   .settings(
       libraryDependencies ++= Seq(
-          "org.typelevel" %% "cats" % "0.7.2"
+          "org.typelevel" %% "cats" % "0.7.2",
+          "com.chuusai" %% "shapeless" % "2.3.2"
       )
   )
 
