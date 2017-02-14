@@ -1,0 +1,65 @@
+outline:
+  Background
+    scrum master on holiday.
+    intern knocked up bash script.
+    i thought: Free Monads!
+  Wtf are Free Monads?
+    What's a Monad?
+      Lots of Monads of Scala we we all hopefully use.
+      Lots of them model Either[Bad, Good] where if we hit a Bad state in our "program", the rest of the program is shortcircuited.
+        type Option = Bad Either Good
+        type Try = Bad Either Good
+        type Either[Bad, Good] = uhhh
+        type Future = Bad Either Good //but async :O
+      But there are other Monads
+        List (variable number of values - you can treat Option as as Sequence of 0 or 1 items)
+        Reader (dependency Injection - but really just functions)
+        Writer (Logging) - hmmm... that's an effect
+        * So we can think of monads as representing some sort of effect.
+        State - read or write to some State/Context "map"
+          It's a monad. We can make decision based on result of prevision "changes" to the state
+            <<Example here>>
+        * So we can think of Monads as FP semicolons
+		.mapAsync as an example? Which is really Future.traverse with throttling/barries
+        So that's Monads...
+        Sidenote: Bad things about Monads: 
+          They're quite powerful, use less powerful things if possible, i.e. Applicative. (Link to talks about Free Applicative?)
+          They don't compose. e.g. Future[Option[List]] can be awkward to work with. 
+            Checkout 'Eff' and 'Emm' Monads.
+    So how do I free it?
+      No, not free as in freedom, free as in beer (insert fun picture)
+      Instead, Monad of any arbitrary data type. AKA algebra.
+        ADTs in Scala are just case classes. <<Example>>
+      Give ADT MyType, we use the Free monad to create Free[MyType]. Which has `flatMap`
+      <<More detail here>>
+    Why?
+      Our ADT can model a DSL.
+      We can write programs in our DSL, where the next part of the program depends on what has happened so far.
+      Ok... Sure. Why?
+        Seperation of concerns.
+        Your program is pure. Written against your simple/restricted DSL, Using flatMap as semicolons.
+        The interpreter is completely seperate, and just needs to be a function which takes one of your instructions and runs it. 
+          Presumably with side effects in production.
+          Use a diferrent one in testing.
+          Compile down to a lower level language (see Doobie)
+        You can text your program and interpreter seperate. Neither should be too complex.
+        You get some things for free: https://youtu.be/M258zVn4m2M?t=36m
+          Retry portions of program.
+          Draw diagram of the program
+          Step through the program
+    How do?
+      Define DSL.
+      Write program.
+      Write interpeter.
+      Testing: 
+        DSL is just ADT. 
+        Program can use mocked out interpeter - check it makes the right decisions. 
+        Interpeter just supports a few statements - simple to test.
+    Demo
+    Anything else?
+      Tagless encoding
+        How far do I want to go here?
+      Doobie (function JDBC library; part of typeleve) is implemented under the hook as a number of Free DSLs.
+References
+Questions
+      

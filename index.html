@@ -1,0 +1,325 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <title>reveal.js</title>
+
+    <link rel="stylesheet" href="css/reveal.css">
+    <link rel="stylesheet" href="css/theme/sky.css">
+
+    <!-- Theme used for syntax highlighting of code -->
+    <link rel="stylesheet" href="lib/css/color-brewer.css">
+
+    <!-- Printing and PDF exports -->
+    <script>
+      var link = document.createElement( 'link' );
+      link.rel = 'stylesheet';
+      link.type = 'text/css';
+      link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
+      document.getElementsByTagName( 'head' )[0].appendChild( link );
+    </script>
+    <style>
+      .reveal .footer {
+        position: absolute;
+        bottom: 1em;
+        left: 1em;
+        font-size: 0.7em;
+      }
+
+      /*Theme overrides*/
+        .reveal h1, .reveal h2, .reveal h3, .reveal h4, .reveal h5, .reveal h6 {
+          text-transform: none;
+        }
+    </style>
+  </head>
+  <body>
+    <div class="reveal">
+<!--       <div class='footer'>
+        <a href="https://grogs.github.io/scala-fp">grogs.github.io/scala-fp</a>
+      </div>
+ -->      <div class="slides">
+        <section data-markdown data-separator="^~~~~" data-separator-vertical="^~" data-notes="^Note:">
+<script type="text/template">
+## RobBot
+### Running your standup with a Free monad.  
+~~~~
+### Who am I?  
+
+* Greg Dorrell  
+* Scala Developer at Hotels.com
+~~~~
+What is RobBot?
+~
+Scrum master went on holiday for 2 weeks.  
+
+Someone else will have to run the standup.  
+
+![Oh noes!](oh-noes-lionking.png)
+~
+Intern wrote a bash script to run the standup.  
+
+![Like a boss](like-a-boss.jpg)<!-- .element height="40%" width="40%" -->  
+
+Leveraging the `say` command built into OSX for text to speech.
+~
+I thought it should be a Free monad.  
+
+![Yes](captain-obvious-yes.gif)
+
+Note:
+* This is nothing new. Runar was talking about this 3 years ago.
+* I wanted to explore the technique.
+
+~~~~
+Wtf is a Free Monad?
+
+![I don't even. What?](i-dont-even.gif)
+
+~
+What's a monad?
+~
+You're already using them. One definition bad could be:
+
+> Things you can use in a for-comprehension
+~
+There a number of Monads that allow you handle success or failure.
+* Option 
+* Try
+* std Either / cats Xor / scalactic Or
+* Future is like Try, but also asynchronous.
+
+<br />
+
+```
+for {
+  user <- getUser(request)
+  profile <- getProfile(user)
+} yeild profile.description
+```
+
+~
+But there's other monads. Modelling different computational effects.
+~
+###List  
+
+Non-deterministic computation.   
+Instead of producing a single result, might produce many
+
+
+Note: variable number of values - you can treat Option as as Sequence of 0 or 1 items
+~
+###Reader 
+
+Computations woth the ability to ask for a value.
+
+```
+  val reader = for {
+    getAddresses <- FindUsers.inactive.local[Config](_.dataStore)
+    emailInactive <- UserReminder.emailInactive(getAddresses).local[Config](_.emailServer)
+    retainUsers <- pure(CustomerRelations.retainUsers(emailInactive))
+  } yield retainUsers
+
+  reader.read(config)()
+```
+
+Note: 
+dependency Injection - I'll let Dave talk about this later
+~
+###Writer (Logging)
+The ability to write a value on the side.
+
+```
+val r = 
+  for { 
+    n <- log("computing an int", 42)
+    o <- log("adding 7", 7 + n)
+    p <- nolog(o + 3)
+    q <- log("is even?", p % 2 == 0)
+  } yield !q
+
+r.log foreach println
+r.value
+```
+
+Note: 
+Useful if you want to test logging
+Or maybe you want to capture debug level logging, but not actually log unless failure.
+hmmm... that's an effect 
+~
+###State
+Computations with the ability to get and set some state  
+<!-- read or write to some State/Context "map"   -->
+
+<!-- It's a monad. We can make decision based on result of prevision "changes" to the state -->
+
+
+~~~~
+We can think of Monads as programmable semicolons.  
+
+<div>
+  With `Writer` each line in our for-comprehension could log some output.  
+
+  With `State` each line/flatMap could read from, or update, the state  
+</div><!-- .element: class="fragment" data-fragment-index="1" -->
+
+~
+###flatMap as the semicolon on Future
+
+Sequential
+```
+for {
+  a <- networkCall("a")
+  b <- networkCall("b")
+} yield a + b
+```
+
+vs.
+
+
+Parallel
+```
+val eventualA = networkCall("a")
+val eventualB = networkCall("b")
+for {
+  a <- eventualA
+  b <- eventualB
+} yield a + b
+```
+
+given 
+```
+def networkCall(in: String): Future[Int]
+```
+
+Note:
+* This is kind of unintuitive, and maybe confusing.
+* But, this can actually be useful...
+~
+
+Say we want to fetch 100000 users from some REST endpoint, and we have an async client.
+
+We could do:
+
+```
+def fetch(id: UserId): Future[UserProfile] = ...
+
+val ids: List[UserId] = ... //With 100k ids
+
+Future.traverse(ids)(fetch)
+```
+
+Note: But now we're spawning 100k Futures at once. Potentially 100k concurrent calls.
+~
+
+What if we want to throttle the number of concurrent calls?
+
+One approach... flatMap<!-- .element: class="fragment" data-fragment-index="1" -->
+~
+Future.traverse, but only process N number on items at a time.
+```
+def traverseBatched[In, Out](in: List[In], parallelism: Int)
+                            (func: In => Future[Out]): Future[List[Out]] = {
+  val empty = Future.successful(List.empty[Out])
+  in
+    .grouped(parallelism)
+    .foldLeft(empty) {
+      (processed, nextBatch) =>
+        processed.flatMap { previous =>
+          Future
+            .traverse(nextBatch)(func)
+            .map(previous ++ _)
+        }
+    }
+}
+```
+~
+So that's Monads...
+
+<div>
+  Sidenote: Disadvantages of Monads: 
+    They're quite powerful, use less powerful things if possible, i.e. Applicative. (Link to talks about Free Applicative?)
+    They don't compose. e.g. Future[Option[List]] can be awkward to work with. 
+      Checkout 'Eff' and 'Emm' Monads.
+</div><!-- .element: class="fragment" data-fragment-index="1" -->
+~~~~
+So how do I free it?
+~
+By Free, be mean unrestricted. 
+
+Note:
+No free as in cost. There is actually a performance overhead.
+~
+Instead, Monad of any algebraic data type. 
+~
+ADTs in Scala are just case classes. <<Example>>
+Give ADT MyType, we use the Free monad to create Free[MyType]. Which has `flatMap`
+~~~~
+Why?
+Our ADT can model a DSL.
+We can write programs in our DSL, where the next part of the program depends on what has happened so far.
+Ok... Sure. Why?
+  Seperation of concerns.
+  Your program is pure. Written against your simple/restricted DSL, Using flatMap as semicolons.
+  The interpreter is completely seperate, and just needs to be a function which takes one of your instructions and runs it. 
+    Presumably with side effects in production.
+    Use a diferrent one in testing.
+    Compile down to a lower level language (see Doobie)
+  You can text your program and interpreter seperate. Neither should be too complex.
+  You get some things for free: https://youtu.be/M258zVn4m2M?t=36m
+    Retry portions of program.
+    Draw diagram of the program
+    Step through the program
+How do?
+  Define DSL.
+  Write program.
+  Write interpeter.
+  Testing: 
+    DSL is just ADT. 
+    Program can use mocked out interpeter - check it makes the right decisions. 
+    Interpeter just supports a few statements - simple to test.
+Demo
+Anything else?
+  Tagless encoding
+    How far do I want to go here?
+  Doobie (function JDBC library; part of typeleve) is implemented under the hook as a number of Free DSLs.
+
+  ~~~~
+  Questions?
+  ~~~~
+  References/Further reading
+
+  * [The List Monad](https://www.schoolofhaskell.com/school/starting-with-haskell/basics-of-haskell/13-the-list-monad)
+  * [Eff: Out of the box effects](http://atnos-org.github.io/eff/org.atnos.site.OutOfTheBox.html)
+  * [Non-trivial Reader Monad example](http://stackoverflow.com/a/30880856/126583)
+  * [Descriptions (and motivations!) for "all the monads"](https://wiki.haskell.org/All_About_Monads)
+  * [Scala Writer monad description and example](http://stackoverflow.com/questions/2322783/how-to-add-tracing-within-a-for-comprehension)
+  * [Alternate explanations of some monads. In Scala.](http://blog.higher-order.com/blog/2015/06/23/a-scala-comonad-tutorial/)
+  * [Free monads - what? and why?](https://softwaremill.com/free-monads/)
+  * [The Free monad and its cost](https://engineering.sharethrough.com/blog/2016/07/28/monads-part-2-the-free-monad/)
+
+</script>         
+        </section>
+      </div>
+    </div>
+
+    <script src="lib/js/head.min.js"></script>
+    <script src="js/reveal.js"></script>
+
+    <script>
+      // More info https://github.com/hakimel/reveal.js#configuration
+      Reveal.initialize({
+        history: true,
+
+        // More info https://github.com/hakimel/reveal.js#dependencies
+        dependencies: [
+          { src: 'plugin/markdown/marked.js' },
+          { src: 'plugin/markdown/markdown.js' },
+          { src: 'plugin/notes/notes.js', async: true },
+          { src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } }
+        ]
+      });
+    </script>
+  </body>
+</html>
