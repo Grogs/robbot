@@ -100,7 +100,7 @@ flatMap is how we compose monads
 ~
 You're already using them. 
 ~
-There a number of Monads that allow you handle success or failure.
+There a number of Monads that model success or failure.
 * Option 
 * Try
 * std Either / cats Xor / scalactic Or
@@ -112,7 +112,7 @@ There a number of Monads that allow you handle success or failure.
 for {
   user <- getUser(request)
   profile <- getProfile(user)
-} yeild profile.description
+} yield profile.description
 ```
 
 Note:
@@ -264,28 +264,28 @@ Seperation of concerns.
 ~
 
 ```
-  object OsxInteractionInterpreter extends (StandupDsl ~> Id) {
+object OsxStandupInterpreter extends (StandupDsl ~> Id) {
 
-    def apply[A](cmd: StandupDsl[A]) = cmd match {
+  def apply[A](cmd: StandupDsl[A]) = cmd match {
 
-        case Say(text) =>
-          say(text)
-          ()
+    case Say(text) =>
+      say(text)
+      ()
 
-        case Receive =>
-          readLine().asInstanceOf[A]
+    case Receive =>
+      readLine().asInstanceOf[A]
 
-        case Ask(question) =>
-          say(question)
-          readLine().asInstanceOf[A]
-      }
-
-    def say(text: String) = {
-      println(text)
-      s"say -v Alex $text".!!
-    }
-
+    case Ask(question) =>
+      say(question)
+      readLine().asInstanceOf[A]
   }
+
+  def say(text: String) = {
+    println(text)
+    s"say -v Alex $text".!!
+  }
+
+}
 ```
 
 Note: 
@@ -299,30 +299,29 @@ Note:
 Our program:
 
 ```
-    val theStandup: Free[StandupDsl, Unit] = for {
-        _ <- Say("Good morning everyone").lift
-        jacekStatus <- Ask("How are you today yaseck?").lift
-        jacekResponse = if (jacekStatus == "g") "Great. Glad to hear it!" else "Oh dear!"
-        _ <- Say(jacekResponse).lift
-        _ <- Ask("Where is Russel this morning?").lift
-        _ <- Ask("Any updates to production?").lift
-        _ <- Say("okay moving on").lift
-        _ <- Say("Shall we talk about this ticket?").lift
-        _ <- until("e") {
-            for {
-                in <- Receive.lift
-                resp <- in match {
-                    case "n" => Say(Random.shuffle(nextTicketResponses).head).lift
-                    case "l" => Say(Random.shuffle(tooLongResponses).head).lift
-                    case "h" => Say("Well how do you feel about this?").lift
-                    case "r" => Say("Yacek could you put a red dot on that").lift
-                    case "e" =>
-                        Say("Okay great thanks everyone").lift
-                    case _ => Say("Sorry I didn't quite catch that?").lift
-                }
-            } yield in
-        }
-    } yield ()
+val theStandup: Free[StandupDsl, Unit] = for {
+  _ <- Say("Good morning everyone").lift
+  jacekStatus <- Ask("How are you today yaseck?").lift
+  jacekResponse = if (jacekStatus == "g") "Great. Glad to hear it!" else "Oh dear!"
+  _ <- Say(jacekResponse).lift
+  _ <- Ask("Where is Russel this morning?").lift
+  _ <- Ask("Any updates to production?").lift
+  _ <- Say("okay moving on").lift
+  _ <- Say("Shall we talk about this ticket?").lift
+  _ <- until("e") {
+    for {
+      in <- Receive.lift
+      resp <- in match {
+        case "n" => Say(Random.shuffle(nextTicketResponses).head).lift
+        case "l" => Say(Random.shuffle(tooLongResponses).head).lift
+        case "h" => Say("Well how do you feel about this?").lift
+        case "r" => Say("Yacek could you put a red dot on that").lift
+        case "e" => Say("Okay great thanks everyone").lift
+        case _ => Say("Sorry I didn't quite catch that?").lift
+      }
+    } yield in
+  }
+} yield ()
 ```
 
 Note:
