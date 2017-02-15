@@ -1,47 +1,36 @@
-import cats.free.Free
 import cats.{Id, ~>}
-import language.{Ask, Closed, GetTickets, InteractionDsl, Receive, Say, SetStatus, StandupDsl, TicketDsl}
+import language.{Ask, Receive, Say, StandupDsl}
 
 import scala.sys.process._
 
 
 object OsxStandup extends App {
-  val interpreter = new StandupInterpreter(OsxInteractionInterpreter, JiraInterpreter)
 
-  def run[Res](standup: Free[StandupDsl, Res], interpreter: StandupInterpreter): Res =
-    standup.foldMap(interpreter)
-
-  run(new Standup().theStandup, interpreter)
+  val standup = new Standup().theStandup
+  standup.foldMap(OsxInteractionInterpreter)
 
 
-  object OsxInteractionInterpreter extends (InteractionDsl ~> Id) {
+  object OsxInteractionInterpreter extends (StandupDsl ~> Id) {
 
-    def say(text: String, voice: Option[String]) = {
-      println(text)
-      s"say -v ${voice.getOrElse("Alex")} $text".!!
-    }
+    def apply[A](cmd: StandupDsl[A]) = cmd match {
 
-    def apply[A](fa: InteractionDsl[A]) =
-      fa match {
-        case Say(text, voice) =>
-          say(text, voice)
+        case Say(text) =>
+          say(text)
           ()
+
         case Receive =>
           readLine().asInstanceOf[A]
+
         case Ask(question) =>
-          say(question, None)
+          say(question)
           readLine().asInstanceOf[A]
       }
 
-  }
-
-  object JiraInterpreter extends (TicketDsl ~> Id) {
-    def apply[A](instr: TicketDsl[A]) = instr match {
-      case GetTickets =>
-        Seq("1. Implement standup with bash script" -> Closed).asInstanceOf[A]
-      case SetStatus(ticket: String, newStatus) =>
-        println(s"Transitioning $ticket to $newStatus").asInstanceOf[A]
+    def say(text: String) = {
+      println(text)
+      s"say -v Alex $text".!!
     }
+
   }
 
 }

@@ -1,18 +1,32 @@
 import cats.{Id, ~>}
-import language.{Ask, InteractionDsl, Receive, Say}
+import language.{Ask, Receive, Say, StandupDsl}
 
 import scala.scalajs.js.Dynamic.global
 import scala.scalajs.js.JSApp
 import scala.scalajs.js.annotation.JSExport
 
 object BrowserStandup extends JSApp {
-  val interpreter = new StandupInterpreter(BrowserInteractionInterpreter, null)
 
   @JSExport
-  override def main(): Unit =
-    new Standup().theStandup.foldMap(interpreter)
+  override def main(): Unit = {
+    val standup = new Standup().theStandup
+    standup.foldMap(BrowserInteractionInterpreter)
+  }
 
-  object BrowserInteractionInterpreter extends (InteractionDsl ~> Id) {
+  object BrowserInteractionInterpreter extends (StandupDsl ~> Id) {
+
+    def apply[A](cmd: StandupDsl[A]) = cmd match {
+
+      case Say(text, voice) =>
+        alert(text)
+        ()
+
+      case Receive =>
+        prompt().asInstanceOf[A]
+
+      case Ask(question) =>
+        prompt(question).asInstanceOf[A]
+    }
 
     def prompt(text: String = "") = {
       println(text)
@@ -23,16 +37,6 @@ object BrowserStandup extends JSApp {
       global.alert(text).asInstanceOf[Unit]
     }
 
-    def apply[A](fa: InteractionDsl[A]) =
-      fa match {
-        case Say(text, voice) =>
-          alert(text)
-          ()
-        case Receive =>
-          prompt().asInstanceOf[A]
-        case Ask(question) =>
-          prompt(question).asInstanceOf[A]
-      }
 
   }
 
