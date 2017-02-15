@@ -56,7 +56,7 @@ Scrum master went on holiday for 2 weeks.
 
 Someone else would have to run the standup.  
 
-![Oh noes!](oh-noes-lionking.png)
+<!-- ![Oh noes!](oh-noes-lionking.png) -->
 ~
 Intern wrote a bash script to run the standup.  
 
@@ -85,8 +85,10 @@ A data type which conforms to the monad laws.
 ~
 ![I don't even. What?](i-dont-even.gif)
 ~
-But this doesn't give you much intuition. 
+The laws don't give you any intuition. 
 ~
+###One intuition
+
 A monad allows you to build pipelines that process some data
 
 <br />
@@ -117,8 +119,6 @@ Note:
 Mention the point function for these monads. (Some/Success/Right/Future.successful)
 You can use flatMap directly or in a for-comprehension
 ~
-But there's other monads. Modelling different computational effects.
-~
 ###List  
 
 Non-deterministic computation.   
@@ -133,6 +133,8 @@ for {
 
 
 Note: Completely different effect. We can short circuit this. But we can also generate many values as output.
+~
+But there's other monads. Modelling different computational effects.
 ~
 ###Reader 
 
@@ -179,9 +181,8 @@ Computations with the ability to get and set some state
 
 ```
 case class State[S, +A](run: S => (A, S)) {
-  def map[B](f: A => B) = ...
-  def map2[B,C](sb: State[S, B])(f: (A, B) => C) = ...
   def flatMap[B](f: A => State[S, B]) = ...
+  ...
 }
 
 ```
@@ -348,6 +349,10 @@ But more generic means more [implicit] sugar, which can make it harder to follow
 
 * We could have more interpreters (e.g. HipChat/Slack)
 * DSL isn't specific to standups. Could write new programs and reuse interpeters.
+
+It's used to implement other cool things:
+* Doobie
+* Eff Monad
 ~~~~
 
 ##Questions?
@@ -357,6 +362,7 @@ But more generic means more [implicit] sugar, which can make it harder to follow
 ~~~~
 References/Further reading
 
+* [Tagless Encoding - Alternatives to GADTs in Scala](https://pchiusano.github.io/2014-05-20/scala-gadts.html)
 * [The List Monad](https://www.schoolofhaskell.com/school/starting-with-haskell/basics-of-haskell/13-the-list-monad)
 * [Eff: Out of the box effects](http://atnos-org.github.io/eff/org.atnos.site.OutOfTheBox.html)
 * [Non-trivial Reader Monad example](http://stackoverflow.com/a/30880856/126583)
@@ -369,17 +375,18 @@ References/Further reading
 * [Scalaz State Monad](https://softwarecorner.wordpress.com/2013/08/29/scalaz-state-monad/)
 
 
+</script>         
+        </section>
+      </div>
+    </div>
+
+
 <!-- <div> -->
    <!-- Disadvantages of Monads:  -->
     <!-- They're quite powerful, use less powerful things if possible, i.e. Applicative. (Link to talks about Free Applicative?) -->
     <!-- They don't compose. e.g. Future[Option[List]] can be awkward to work with.  -->
       <!-- Checkout 'Eff' and 'Emm' Monads. -->
 <!-- </div>.element: class="fragment" data-fragment-index="1" -->
-
-</script>         
-        </section>
-      </div>
-    </div>
 
 
 
