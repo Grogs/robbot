@@ -92,6 +92,9 @@ A monad allows you to build pipelines that process some data
 <br />
 
 Each stage of the pipeline allows additional processing rules provided by the monad.
+
+Note:
+flatMap is how we compose monads
 ~
 You're already using them. 
 ~
@@ -146,7 +149,9 @@ Computations with the ability to ask for a value.
 ```
 
 Note: 
-dependency Injection - I'll let Dave talk about this later
+* dependency Injection - I'll let Dave talk about this later
+* Completely different sort of effect.
+* Evaluation is defered until you call .read
 ~
 ###Writer (Logging)
 The ability to write a value on the side.
@@ -173,12 +178,23 @@ hmmm... that's an effect
 Computations with the ability to get and set some state  
 
 ```
-val m = for {
-  _    <- modify { s: String => s * s.size }
-  size <- gets { s: String => s.size }
-} yield size
+case class State[S, +A](run: S => (A, S)) {
+  def map[B](f: A => B) = ...
+  def map2[B,C](sb: State[S, B])(f: (A, B) => C) = ...
+  def flatMap[B](f: A => State[S, B]) = ...
+}
 
-m.run("hello")    ====>    ("hellohellohellohellohello", 25)
+```
+```
+def get[S]: State[S, S] = State(s => (s, s))
+def set[S](s: S): State[S, Unit] = State(_ => ((), s))
+```
+
+```
+def modify[S](f: S => S): State[S, Unit] = for {
+  s <- get // Gets the current state and assigns it to `s`.
+  _ <- set(f(s)) // Sets the new state to `f` applied to `s`.
+} yield ()
 ```
 <!-- read or write to some State/Context "map"   -->
 
@@ -196,37 +212,50 @@ By Free, we mean unrestricted.
 
 Note:
 * Not free as in cost. There is actually a performance overhead.
-~
-We can create a Free monad from any algebra (ADT in Scala)
-
-TODO: Elaborate
-
-Note:
 * Actually we'll be looking at Free-er Monad. But a lot of the literature doesn't distinguish between them. So I'm not.
   * [http://okmij.org/ftp/Haskell/extensible/more.pdf](http://okmij.org/ftp/Haskell/extensible/more.pdf)
+
 ~
-###Why?
-
-Interpreter pattern
-
-* We can create a DSL.
-* Use Free to build a program with it.
-* Then intepret it.
-
-Note:
-Seperation of concerns. Which we will see later.
-~~~~
-###RobBot DSL:
+Given some algebra:
 
 ```
 sealed trait StandupDsl[Output]
 
-case class Say(text: String, voice: Option[String] = None) extends StandupDsl[Unit]
+case class Say(text: String) extends StandupDsl[Unit]
 case object Receive extends StandupDsl[String]
 case class Ask(question: String) extends StandupDsl[String]
 ```
 ~
-###An intepreter
+We can lift it into the Free monad. With cats:
+
+```
+val saySomething: Free[StandupDsl, Unit] = 
+  Free.liftF(Say("something"))
+```
+~
+This gives us flatMap, I can not compose a pipeline/program.
+
+```
+val program: Free[StandupDsl, String] = for{
+  _ <- Free.liftF(Say("hello"))
+  response <- Free.liftF(Ask("When does this run?"))
+} yield response
+
+...what do I do with program...
+```
+
+But we haven't defined the behaviour/effects of the monad.
+~
+###Free Monad + Interpreter pattern.  
+
+* We defined a DSL.
+* We used Free to write a program with our DSL.
+* Now we can run it with an interpreter.
+
+Note:
+Seperation of concerns. 
+
+~
 
 ```
   object OsxInteractionInterpreter extends (StandupDsl ~> Id) {
@@ -252,12 +281,13 @@ case class Ask(question: String) extends StandupDsl[String]
 
   }
 ```
-~
+
+~~~~
 Our program:
 
 ```
     val theStandup: Free[StandupDsl, Unit] = for {
-        _ <- Say("Good morning everyone", Some("Cellos")).lift
+        _ <- Say("Good morning everyone").lift
         jacekStatus <- Ask("How are you today yaseck?").lift
         jacekResponse = if (jacekStatus == "g") "Great. Glad to hear it!" else "Oh dear!"
         _ <- Say(jacekResponse).lift
@@ -281,6 +311,10 @@ Our program:
         }
     } yield ()
 ```
+
+Note:
+* I'm not using Free.liftT
+* I have this 'until' thing.
 ~
 ###Some plumbing
 
@@ -289,12 +323,12 @@ implicit class LiftSugar[Output](instruction: StandupDsl[Output]){
   def lift: Free[StandupDsl, Output] = Free.liftF(instruction)
 }
 
-def until[T](term: T)(m: => Free[StandupDsl, T]): Free[StandupDsl, T] = {
-  m.flatMap(res =>
+def until[T](term: T)(body: => Free[StandupDsl, T]): Free[StandupDsl, T] = {
+  body.flatMap(res =>
     if (res == term)
       Free.pure(res)
     else
-      until(term)(m)
+      until(term)(body)
   )
 }
 ```
@@ -310,10 +344,10 @@ But more generic means more [implicit] sugar, which can make it harder to follow
   Doobie (function JDBC library; part of typeleve) is implemented under the hook as a number of Free DSLs.
  -->
 ~~~~
-TODO Why is this cool?
+###Why is this cool?
 
 * We could have more interpreters (e.g. HipChat/Slack)
-* Nothing about out DSL is specific to standups. Could implement a chatbot.
+* DSL isn't specific to standups. Could write new programs and reuse interpeters.
 ~~~~
 
 ##Questions?
