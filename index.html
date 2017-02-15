@@ -288,6 +288,13 @@ Seperation of concerns.
   }
 ```
 
+Note: 
+* Bad code:
+  * Blocking.
+  * Side effects.
+* But our program is pure.
+* The intepreter is small and tested seperately.
+
 ~~~~
 Our program:
 
@@ -321,6 +328,8 @@ Our program:
 Note:
 * I'm not using Free.liftT
 * I have this 'until' thing.
+
+* Encodes our "busy logic"
 ~
 ###Some plumbing
 
