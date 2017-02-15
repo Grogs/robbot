@@ -36,10 +36,10 @@
   </head>
   <body>
     <div class="reveal">
-<!--       <div class='footer'>
-        <a href="https://grogs.github.io/scala-fp">grogs.github.io/scala-fp</a>
+      <div class='footer'>
+        <a href="https://grogs.github.io/robbot">grogs.github.io/robbot</a>
       </div>
- -->      <div class="slides">
+      <div class="slides">
         <section data-markdown data-separator="^~~~~" data-separator-vertical="^~" data-notes="^Note:">
 <script type="text/template">
 ## RobBot
@@ -54,15 +54,13 @@ What is RobBot?
 ~
 Scrum master went on holiday for 2 weeks.  
 
-Someone else will have to run the standup.  
+Someone else would have to run the standup.  
 
 ![Oh noes!](oh-noes-lionking.png)
 ~
 Intern wrote a bash script to run the standup.  
 
-![Like a boss](like-a-boss.jpg)<!-- .element height="40%" width="40%" -->  
-
-Leveraging the `say` command built into OSX for text to speech.
+Note: Leveraging the `say` command built into OSX for text to speech.
 ~
 I thought it should be a Free monad.  
 
@@ -74,15 +72,28 @@ Note:
 
 ~~~~
 Wtf is a Free Monad?
-
-![I don't even. What?](i-dont-even.gif)
-
 ~
 What's a monad?
 ~
-You're already using them. One definition bad could be:
+A data type which conforms to the monad laws.
 
-> Things you can use in a for-comprehension
+* Implements point  
+  <div style="color:#aaa">AKA lift AKA identity AKA return</div>
+* Implements associative flatMap  
+  <div style="color:#aaa">AKA bind</div>
+
+~
+![I don't even. What?](i-dont-even.gif)
+~
+But this doesn't give you much intuition. 
+~
+A monad allows you to build pipelines that process some data
+
+<br />
+
+Each stage of the pipeline allows additional processing rules provided by the monad.
+~
+You're already using them. 
 ~
 There a number of Monads that allow you handle success or failure.
 * Option 
@@ -99,6 +110,9 @@ for {
 } yeild profile.description
 ```
 
+Note:
+Mention the point function for these monads. (Some/Success/Right/Future.successful)
+You can use flatMap directly or in a for-comprehension
 ~
 But there's other monads. Modelling different computational effects.
 ~
@@ -107,12 +121,19 @@ But there's other monads. Modelling different computational effects.
 Non-deterministic computation.   
 Instead of producing a single result, might produce many
 
+```
+for {
+  a <- 1 to 99
+  b <- 1 to 999
+} yield s"output $a $b"
+```
 
-Note: variable number of values - you can treat Option as as Sequence of 0 or 1 items
+
+Note: Completely different effect. We can short circuit this. But we can also generate many values as output.
 ~
 ###Reader 
 
-Computations woth the ability to ask for a value.
+Computations with the ability to ask for a value.
 
 ```
   val reader = for {
@@ -150,21 +171,204 @@ hmmm... that's an effect
 ~
 ###State
 Computations with the ability to get and set some state  
+
+```
+val m = for {
+  _    <- modify { s: String => s * s.size }
+  size <- gets { s: String => s.size }
+} yield size
+
+m.run("hello")    ====>    ("hellohellohellohellohello", 25)
+```
 <!-- read or write to some State/Context "map"   -->
 
 <!-- It's a monad. We can make decision based on result of prevision "changes" to the state -->
 
+~
+So that's Monads...
+
+Note: 
+Hopefully you can buy into the idea of Monad as programming semicolon.
+~~~~
+So how do I free it?
+~
+By Free, we mean unrestricted. 
+
+Note:
+* Not free as in cost. There is actually a performance overhead.
+~
+We can create a Free monad from any algebra (ADT in Scala)
+
+TODO: Elaborate
+
+Note:
+* Actually we'll be looking at Free-er Monad. But a lot of the literature doesn't distinguish between them. So I'm not.
+  * [http://okmij.org/ftp/Haskell/extensible/more.pdf](http://okmij.org/ftp/Haskell/extensible/more.pdf)
+~
+###Why?
+
+Interpreter pattern
+
+* We can create a DSL.
+* Use Free to build a program with it.
+* Then intepret it.
+
+Note:
+Seperation of concerns. Which we will see later.
+~~~~
+###RobBot DSL:
+
+```
+sealed trait StandupDsl[Output]
+
+case class Say(text: String, voice: Option[String] = None) extends StandupDsl[Unit]
+case object Receive extends StandupDsl[String]
+case class Ask(question: String) extends StandupDsl[String]
+```
+~
+###An intepreter
+
+```
+  object OsxInteractionInterpreter extends (StandupDsl ~> Id) {
+
+    def apply[A](cmd: StandupDsl[A]) = cmd match {
+
+        case Say(text) =>
+          say(text)
+          ()
+
+        case Receive =>
+          readLine().asInstanceOf[A]
+
+        case Ask(question) =>
+          say(question)
+          readLine().asInstanceOf[A]
+      }
+
+    def say(text: String) = {
+      println(text)
+      s"say -v Alex $text".!!
+    }
+
+  }
+```
+~
+Our program:
+
+```
+    val theStandup: Free[StandupDsl, Unit] = for {
+        _ <- Say("Good morning everyone", Some("Cellos")).lift
+        jacekStatus <- Ask("How are you today yaseck?").lift
+        jacekResponse = if (jacekStatus == "g") "Great. Glad to hear it!" else "Oh dear!"
+        _ <- Say(jacekResponse).lift
+        _ <- Ask("Where is Russel this morning?").lift
+        _ <- Ask("Any updates to production?").lift
+        _ <- Say("okay moving on").lift
+        _ <- Say("Shall we talk about this ticket?").lift
+        _ <- until("e") {
+            for {
+                in <- Receive.lift
+                resp <- in match {
+                    case "n" => Say(Random.shuffle(nextTicketResponses).head).lift
+                    case "l" => Say(Random.shuffle(tooLongResponses).head).lift
+                    case "h" => Say("Well how do you feel about this?").lift
+                    case "r" => Say("Yacek could you put a red dot on that").lift
+                    case "e" =>
+                        Say("Okay great thanks everyone").lift
+                    case _ => Say("Sorry I didn't quite catch that?").lift
+                }
+            } yield in
+        }
+    } yield ()
+```
+~
+###Some plumbing
+
+```
+implicit class LiftSugar[Output](instruction: StandupDsl[Output]){
+  def lift: Free[StandupDsl, Output] = Free.liftF(instruction)
+}
+
+def until[T](term: T)(m: => Free[StandupDsl, T]): Free[StandupDsl, T] = {
+  m.flatMap(res =>
+    if (res == term)
+      Free.pure(res)
+    else
+      until(term)(m)
+  )
+}
+```
+
+Note:
+This can be made more generic.
+But more generic means more [implicit] sugar, which can make it harder to follow and debug
+~
+##DEMO
+
+<!--   Tagless encoding
+    How far do I want to go here?
+  Doobie (function JDBC library; part of typeleve) is implemented under the hook as a number of Free DSLs.
+ -->
+~~~~
+TODO Why is this cool?
+
+* We could have more interpreters (e.g. HipChat/Slack)
+* Nothing about out DSL is specific to standups. Could implement a chatbot.
+~~~~
+
+##Questions?
+
+![An amusing captain obvious GIF](questions.gif)
 
 ~~~~
-We can think of Monads as programmable semicolons.  
+References/Further reading
 
-<div>
-  With `Writer` each line in our for-comprehension could log some output.  
+* [The List Monad](https://www.schoolofhaskell.com/school/starting-with-haskell/basics-of-haskell/13-the-list-monad)
+* [Eff: Out of the box effects](http://atnos-org.github.io/eff/org.atnos.site.OutOfTheBox.html)
+* [Non-trivial Reader Monad example](http://stackoverflow.com/a/30880856/126583)
+* [Descriptions (and motivations!) for "all the monads"](https://wiki.haskell.org/All_About_Monads)
+* [Scala Writer monad description and example](http://stackoverflow.com/questions/2322783/how-to-add-tracing-within-a-for-comprehension)
+* [Alternate explanations of some monads. In Scala.](http://blog.higher-order.com/blog/2015/06/23/a-scala-comonad-tutorial/)
+* [Free monads - what? and why?](https://softwaremill.com/free-monads/)
+* [The Free monad and its cost](https://engineering.sharethrough.com/blog/2016/07/28/monads-part-2-the-free-monad/)
+* [Freer Monads, More Extensible Effects](http://okmij.org/ftp/Haskell/extensible/more.pdf)
+* [Scalaz State Monad](https://softwarecorner.wordpress.com/2013/08/29/scalaz-state-monad/)
 
-  With `State` each line/flatMap could read from, or update, the state  
-</div><!-- .element: class="fragment" data-fragment-index="1" -->
 
-~
+<!-- <div> -->
+   <!-- Disadvantages of Monads:  -->
+    <!-- They're quite powerful, use less powerful things if possible, i.e. Applicative. (Link to talks about Free Applicative?) -->
+    <!-- They don't compose. e.g. Future[Option[List]] can be awkward to work with.  -->
+      <!-- Checkout 'Eff' and 'Emm' Monads. -->
+<!-- </div>.element: class="fragment" data-fragment-index="1" -->
+
+</script>         
+        </section>
+      </div>
+    </div>
+
+
+
+<!-- 
+
+~~~~
+Following the intuition of Monads as pipelines, they can be thought of as programmable semicolons.  
+
+<br />
+Writer Monad:  
+each line in our for-comprehension could log some output.
+<br />
+<br />
+
+State Monad:  
+each line/flatMap could read from, or update, the state.
+
+
+ -->
+
+
+    <!-- 
+
 ###flatMap as the semicolon on Future
 
 Sequential
@@ -200,6 +404,7 @@ Note:
 
 Say we want to fetch 100000 users from some REST endpoint, and we have an async client.
 
+<br />
 We could do:
 
 ```
@@ -207,7 +412,9 @@ def fetch(id: UserId): Future[UserProfile] = ...
 
 val ids: List[UserId] = ... //With 100k ids
 
-Future.traverse(ids)(fetch)
+Future.traverse(ids)(fetch)    
+//equivalent to 
+Future.sequence(ids.map(fetch))
 ```
 
 Note: But now we're spawning 100k Futures at once. Potentially 100k concurrent calls.
@@ -215,14 +422,15 @@ Note: But now we're spawning 100k Futures at once. Potentially 100k concurrent c
 
 What if we want to throttle the number of concurrent calls?
 
-One approach... flatMap<!-- .element: class="fragment" data-fragment-index="1" -->
+One approach... flatMap
 ~
 Future.traverse, but only process N number on items at a time.
 ```
-def traverseBatched[In, Out](in: List[In], parallelism: Int)
+def traverseBatched[In, Out](inputs: List[In], parallelism: Int)
                             (func: In => Future[Out]): Future[List[Out]] = {
   val empty = Future.successful(List.empty[Out])
-  in
+
+  inputs
     .grouped(parallelism)
     .foldLeft(empty) {
       (processed, nextBatch) =>
@@ -234,28 +442,15 @@ def traverseBatched[In, Out](in: List[In], parallelism: Int)
     }
 }
 ```
-~
-So that's Monads...
 
-<div>
-  Sidenote: Disadvantages of Monads: 
-    They're quite powerful, use less powerful things if possible, i.e. Applicative. (Link to talks about Free Applicative?)
-    They don't compose. e.g. Future[Option[List]] can be awkward to work with. 
-      Checkout 'Eff' and 'Emm' Monads.
-</div><!-- .element: class="fragment" data-fragment-index="1" -->
-~~~~
-So how do I free it?
-~
-By Free, be mean unrestricted. 
+Note: 
+We process a batch, then flatMap, delaying processing of later batches. Much like in the for-comprehension example.
 
-Note:
-No free as in cost. There is actually a performance overhead.
-~
-Instead, Monad of any algebraic data type. 
-~
-ADTs in Scala are just case classes. <<Example>>
-Give ADT MyType, we use the Free monad to create Free[MyType]. Which has `flatMap`
-~~~~
+
+     -->
+
+    <!-- 
+
 Why?
 Our ADT can model a DSL.
 We can write programs in our DSL, where the next part of the program depends on what has happened so far.
@@ -281,28 +476,7 @@ How do?
     Interpeter just supports a few statements - simple to test.
 Demo
 Anything else?
-  Tagless encoding
-    How far do I want to go here?
-  Doobie (function JDBC library; part of typeleve) is implemented under the hook as a number of Free DSLs.
-
-  ~~~~
-  Questions?
-  ~~~~
-  References/Further reading
-
-  * [The List Monad](https://www.schoolofhaskell.com/school/starting-with-haskell/basics-of-haskell/13-the-list-monad)
-  * [Eff: Out of the box effects](http://atnos-org.github.io/eff/org.atnos.site.OutOfTheBox.html)
-  * [Non-trivial Reader Monad example](http://stackoverflow.com/a/30880856/126583)
-  * [Descriptions (and motivations!) for "all the monads"](https://wiki.haskell.org/All_About_Monads)
-  * [Scala Writer monad description and example](http://stackoverflow.com/questions/2322783/how-to-add-tracing-within-a-for-comprehension)
-  * [Alternate explanations of some monads. In Scala.](http://blog.higher-order.com/blog/2015/06/23/a-scala-comonad-tutorial/)
-  * [Free monads - what? and why?](https://softwaremill.com/free-monads/)
-  * [The Free monad and its cost](https://engineering.sharethrough.com/blog/2016/07/28/monads-part-2-the-free-monad/)
-
-</script>         
-        </section>
-      </div>
-    </div>
+     -->
 
     <script src="lib/js/head.min.js"></script>
     <script src="js/reveal.js"></script>
