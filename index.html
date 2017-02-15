@@ -135,6 +135,9 @@ for {
 Note: Completely different effect. We can short circuit this. But we can also generate many values as output.
 ~
 But there's other monads. Modelling different computational effects.
+
+Note:
+Which lots of teams aren't using day to day
 ~
 ###Reader 
 
@@ -197,6 +200,10 @@ def modify[S](f: S => S): State[S, Unit] = for {
   _ <- set(f(s)) // Sets the new state to `f` applied to `s`.
 } yield ()
 ```
+
+Note: 
+Modify composes a new State instance by composing get and set.
+Modify is like a mini program.
 <!-- read or write to some State/Context "map"   -->
 
 <!-- It's a monad. We can make decision based on result of prevision "changes" to the state -->
@@ -204,8 +211,6 @@ def modify[S](f: S => S): State[S, Unit] = for {
 ~
 So that's Monads...
 
-Note: 
-Hopefully you can buy into the idea of Monad as programming semicolon.
 ~~~~
 So how do I free it?
 ~
@@ -234,7 +239,7 @@ val saySomething: Free[StandupDsl, Unit] =
   Free.liftF(Say("something"))
 ```
 ~
-This gives us flatMap, I can not compose a pipeline/program.
+This gives us flatMap, I can now compose a pipeline/program.
 
 ```
 val program: Free[StandupDsl, String] = for{
@@ -347,12 +352,18 @@ But more generic means more [implicit] sugar, which can make it harder to follow
 ~~~~
 ###Why is this cool?
 
-* We could have more interpreters (e.g. HipChat/Slack)
-* DSL isn't specific to standups. Could write new programs and reuse interpeters.
+* We could have more interpreters (e.g. HipChat/Slack)  
 
-It's used to implement other cool things:
-* Doobie
-* Eff Monad
+* DSL isn't specific to standups. Could write new programs and reuse interpeters.  
+
+<div>
+  <br />
+  It's used to implement other cool things:<br />
+  <ul>
+    <li>Doobie</li>
+    <li>Eff Monad</li>
+  </ul>
+</div><!-- </div>.element: class="fragment" data-fragment-index="1" -->
 ~~~~
 
 ##Questions?
@@ -360,8 +371,7 @@ It's used to implement other cool things:
 ![An amusing captain obvious GIF](questions.gif)
 
 ~~~~
-References/Further reading
-
+References/Further reading:
 * [Tagless Encoding - Alternatives to GADTs in Scala](https://pchiusano.github.io/2014-05-20/scala-gadts.html)
 * [The List Monad](https://www.schoolofhaskell.com/school/starting-with-haskell/basics-of-haskell/13-the-list-monad)
 * [Eff: Out of the box effects](http://atnos-org.github.io/eff/org.atnos.site.OutOfTheBox.html)
@@ -373,6 +383,8 @@ References/Further reading
 * [The Free monad and its cost](https://engineering.sharethrough.com/blog/2016/07/28/monads-part-2-the-free-monad/)
 * [Freer Monads, More Extensible Effects](http://okmij.org/ftp/Haskell/extensible/more.pdf)
 * [Scalaz State Monad](https://softwarecorner.wordpress.com/2013/08/29/scalaz-state-monad/)
+
+Demo code: [github.com/grogs/robbot](https://github.com/grogs/robbot)
 
 
 </script>         
